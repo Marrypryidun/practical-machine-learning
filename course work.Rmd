@@ -3,8 +3,8 @@ title: "course project"
 author: "m.pryidun"
 date: "2023-02-08"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -96,7 +96,7 @@ varImpPlot(modelRF2$finalModel, sort = TRUE, type = 1, pch=19, col=12, cex=1, ma
 
 # Caculate the Accuracy of the Model
 ```{r}
-
+modelRF2Val <- predict(modelRF2, validationPart)
 modelRF2Acc <- round(postResample(validationPart$classe, modelRF2Val)[[1]], 4)
 modelRF2Acc
 ```
