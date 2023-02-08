@@ -1,0 +1,67 @@
+---
+title: "course project"
+author: "m.pryidun"
+date: "2023-02-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages:
+
+```{r}
+library(caret)
+library(randomForest)
+```
+
+
+# Set urls:
+```{r}
+trainingUrl <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+testCasesUrl <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+```
+
+# Read in the data and identify the NA's
+```{r}
+traindata <- read.csv(trainingUrl, na.strings = c("NA", "#DIV/0!", ""))
+testdata  <- read.csv(testCasesUrl, na.strings = c("NA", "#DIV/0!", ""))
+dim(traindata)
+```
+
+# Create data sets:
+```{r}
+comps <- complete.cases(t(traindata)) & complete.cases(t(testdata))
+traindata <- traindata[,comps]
+testdata  <- testdata[,comps]
+set.seed(111)
+inTrain <- createDataPartition(traindata$classe, p=0.6, list=FALSE)
+traindata2 <- traindata[inTrain,]
+validation <- traindata[-inTrain,]
+```
+
+# Fit a model:
+```{r}
+modFit <- randomForest(as.factor(classe)~., data=traindata2)
+```
+
+# The results on the training set:
+```{r}
+trainresults <- predict(modFit, traindata2)
+trainacc <- sum(trainresults==traindata2$classe)/length(trainresults)
+paste("Accuracy on training set =",trainacc)
+```
+# The results on the validation set:
+```{r}
+validresults <- predict(modFit, newdata=validation)
+validacc <- sum(validresults==validation$classe)/length(validresults)
+paste("Accuracy on validation set =",validacc)
+```
+# The results on the test set
+```{r}
+
+testresults <- predict(modFit, newdata=testdata)
+print("Classifications on the test set:"); testresults
+```
+
