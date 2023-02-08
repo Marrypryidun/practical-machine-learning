@@ -2,7 +2,9 @@
 title: "course project"
 author: "m.pryidun"
 date: "2023-02-08"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -14,54 +16,92 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(caret)
 library(randomForest)
+library(dplyr)
+library(corrplot)
 ```
 
 
 # Set urls:
 ```{r}
-trainingUrl <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
-testCasesUrl <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+trainURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 ```
 
-# Read in the data and identify the NA's
+# Read in the data 
 ```{r}
-traindata <- read.csv(trainingUrl, na.strings = c("NA", "#DIV/0!", ""))
-testdata  <- read.csv(testCasesUrl, na.strings = c("NA", "#DIV/0!", ""))
-dim(traindata)
+download.file(trainURL, destfile = "pml-training.csv", method = "curl")
+download.file(testURL, destfile = "pml-testing.csv", method = "curl")
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
 ```
 
-# Create data sets:
+# Remove na and zero values:
 ```{r}
-comps <- complete.cases(t(traindata)) & complete.cases(t(testdata))
-traindata <- traindata[,comps]
-testdata  <- testdata[,comps]
-set.seed(111)
-inTrain <- createDataPartition(traindata$classe, p=0.6, list=FALSE)
-traindata2 <- traindata[inTrain,]
-validation <- traindata[-inTrain,]
+NAChecker <- function(x){unlist(apply(x, 2, function(x){length(which(!is.na(x)))}))}
+NDataPoints <- NAChecker(training)
+
+CompleteVariable <- c()
+for(i in 1:length(NDataPoints)){
+  if(NDataPoints[[i]]==nrow(training)){
+    CompleteVariable <- c(CompleteVariable, names(training)[i])
+  }
+}
+
+trainingSet <- training[, names(training) %in% CompleteVariable]
+
+nzv <- nearZeroVar(trainingSet, saveMetrics = TRUE)
+
+myVar <- rownames(subset(nzv, nzv==FALSE))
+print(myVar)
 ```
 
-# Fit a model:
+# Create a new data set with newly identified set of variables and remove the first 6 columns which would not be used for prediction:
 ```{r}
-modFit <- randomForest(as.factor(classe)~., data=traindata2)
+myVar <- myVar[-(1:6)]
+trainingData <- select(trainingSet, one_of(myVar))
 ```
 
-# The results on the training set:
+# Slice dataset for validationt:
 ```{r}
-trainresults <- predict(modFit, traindata2)
-trainacc <- sum(trainresults==traindata2$classe)/length(trainresults)
-paste("Accuracy on training set =",trainacc)
+inTrain <- createDataPartition(y=trainingData$classe, p=0.6, list=FALSE)
+
+
+trainingPart <- trainingData[inTrain,]
+validationPart <- trainingData[-inTrain,]
 ```
-# The results on the validation set:
+# Check Relationahsips Among Variables:
 ```{r}
-validresults <- predict(modFit, newdata=validation)
-validacc <- sum(validresults==validation$classe)/length(validresults)
-paste("Accuracy on validation set =",validacc)
+varCorr <- round(cor(trainingPart[sapply(trainingPart, is.numeric)]), 4)
+
+par(ps=5)
+corrplot.mixed(varCorr, order="hclust", tl.col="black", diag="n", tl.pos="lt", lower="circle", upper = "number", tl.cex=1.5, mar=c(1, 0, 1, 0))
 ```
-# The results on the test set
+# Principal Component Analysis
 ```{r}
 
-testresults <- predict(modFit, newdata=testdata)
-print("Classifications on the test set:"); testresults
+reduced <- preProcess(trainingPart[,-53], method = "pca")
+trainingPCA <- predict(reduced, trainingPart[,-53])
+validationPCA <- predict(reduced, validationPart[,-53])
+print(reduced)
+```
+# Build a Random Forest Model Without PCA
+
+```{r}
+
+modelRF2 <- train(classe ~., method="rf", data=trainingPart, trControl = trainControl(method="cv", number=4), ntree=100, importance =TRUE)
+
+par(ps=5)
+varImpPlot(modelRF2$finalModel, sort = TRUE, type = 1, pch=19, col=12, cex=1, main="Importance of Predictor Variables in Random Forest Model")
 ```
 
+# Caculate the Accuracy of the Model
+```{r}
+
+modelRF2Acc <- round(postResample(validationPart$classe, modelRF2Val)[[1]], 4)
+modelRF2Acc
+```
+#Final Test
+```{r}
+modelRF2Test <- predict(modelRF2, testing)
+modelRF2Test
+```
